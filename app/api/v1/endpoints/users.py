@@ -19,9 +19,9 @@ router = APIRouter(
 )
 
 
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------
 # List Users
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 @router.get(
     "",
@@ -31,7 +31,7 @@ router = APIRouter(
 async def list_users(
     user_repository: Annotated[
         UserRepository,
-        Depends(get_user_repository),
+        Depends(get_user_repository)
     ],
     limit: int = 100,
     offset: int = 0,
@@ -50,9 +50,36 @@ async def list_users(
     ]
 
 
-# -------------------------------------------------------------------------
-# Get User by ID
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Search Users
+# ------------------------------------------------------------------
+
+@router.get(
+    "/search",
+    response_model=list[UserRead],
+    dependencies=[Depends(require_role(UserRole.ADMIN))]
+)
+async def search_users(
+    keyword: str,
+    user_repository: Annotated[
+        UserRepository,
+        Depends(get_user_repository)
+    ],
+) -> list[UserRead]:
+
+    service = UserService(user_repository)
+
+    users = await service.search_users(keyword)
+
+    return [
+        UserRead.model_validate(user)
+        for user in users
+    ]
+
+
+# ------------------------------------------------------------------
+# Get User By ID
+# ------------------------------------------------------------------
 
 @router.get(
     "/{user_id}",
@@ -63,7 +90,7 @@ async def get_user_by_id(
     user_id: uuid.UUID,
     user_repository: Annotated[
         UserRepository,
-        Depends(get_user_repository),
+        Depends(get_user_repository)
     ],
 ) -> UserRead:
 
@@ -74,9 +101,9 @@ async def get_user_by_id(
     return UserRead.model_validate(user)
 
 
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------
 # Update User
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 @router.put(
     "/{user_id}",
@@ -88,7 +115,7 @@ async def update_user(
     payload: UserUpdate,
     user_repository: Annotated[
         UserRepository,
-        Depends(get_user_repository),
+        Depends(get_user_repository)
     ],
 ) -> UserRead:
 
@@ -102,9 +129,9 @@ async def update_user(
     return UserRead.model_validate(user)
 
 
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------
 # Delete User
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 @router.delete(
     "/{user_id}",
@@ -115,7 +142,7 @@ async def delete_user(
     user_id: uuid.UUID,
     user_repository: Annotated[
         UserRepository,
-        Depends(get_user_repository),
+        Depends(get_user_repository)
     ],
 ) -> Response:
 
@@ -123,4 +150,6 @@ async def delete_user(
 
     await service.delete_user(user_id)
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT
+    )

@@ -50,6 +50,18 @@ class UserService:
         )
 
     # ------------------------------------------------------------------
+    # Search Users
+    # ------------------------------------------------------------------
+
+    async def search_users(
+        self,
+        keyword: str,
+    ) -> list[User]:
+        """Search users by email or full name."""
+
+        return await self._users.search_users(keyword)
+
+    # ------------------------------------------------------------------
     # Update User
     # ------------------------------------------------------------------
 
@@ -70,7 +82,7 @@ class UserService:
         for field, value in update_data.items():
             setattr(user, field, value)
 
-        return await self._users.update_user(user)
+        return await self._users.update(user)
 
     # ------------------------------------------------------------------
     # Delete User
@@ -88,15 +100,3 @@ class UserService:
             raise NotFoundError("User not found.")
 
         await self._users.delete(user_id)
-
-    # ------------------------------------------------------------------
-    # Search Users
-    # ------------------------------------------------------------------
-
-    async def search_users(
-        self,
-        keyword: str,
-    ) -> list[User]:
-        """Search users by name or email."""
-
-        return await self._users.search_users(keyword)

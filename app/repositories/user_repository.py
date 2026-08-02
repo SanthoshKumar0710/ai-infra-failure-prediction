@@ -18,98 +18,32 @@ class UserRepository(AbstractRepository[User]):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    # ------------------------------------------------------------------
-    # Get User by ID
-    # ------------------------------------------------------------------
-
-    async def get_by_id(
-        self,
-        entity_id: uuid.UUID,
-    ) -> User | None:
+    async def get_by_id(self, entity_id: uuid.UUID) -> User | None:
         return await self._session.get(User, entity_id)
 
-    # ------------------------------------------------------------------
-    # Get User by Email
-    # ------------------------------------------------------------------
-
-    async def get_by_email(
-        self,
-        email: str,
-    ) -> User | None:
-
+    async def get_by_email(self, email: str) -> User | None:
         result = await self._session.execute(
-            select(User).where(
-                User.email == email.lower()
-            )
+            select(User).where(User.email == email.lower())
         )
-
         return result.scalar_one_or_none()
 
-    # ------------------------------------------------------------------
-    # Add User
-    # ------------------------------------------------------------------
-
-    async def add(
-        self,
-        entity: User,
-    ) -> User:
-
+    async def add(self, entity: User) -> User:
         self._session.add(entity)
-
         await self._session.commit()
-
         await self._session.refresh(entity)
-
         return entity
 
-    # ------------------------------------------------------------------
-    # Update User
-    # ------------------------------------------------------------------
-
-    async def update(
-        self,
-        entity: User,
-    ) -> User:
-
+    async def update(self, entity: User) -> User:
         await self._session.commit()
-
         await self._session.refresh(entity)
-
         return entity
 
-    # ------------------------------------------------------------------
-    # Update Existing User
-    # ------------------------------------------------------------------
-
-    async def update_user(
-        self,
-        user: User,
-    ) -> User:
-
-        await self._session.commit()
-
-        await self._session.refresh(user)
-
-        return user
-
-    # ------------------------------------------------------------------
-    # Delete User
-    # ------------------------------------------------------------------
-
-    async def delete(
-        self,
-        entity_id: uuid.UUID,
-    ) -> None:
-
+    async def delete(self, entity_id: uuid.UUID) -> None:
         user = await self.get_by_id(entity_id)
 
         if user is not None:
             await self._session.delete(user)
             await self._session.commit()
-
-    # ------------------------------------------------------------------
-    # Failed Login
-    # ------------------------------------------------------------------
 
     async def record_failed_login(
         self,
@@ -128,14 +62,9 @@ class UserRepository(AbstractRepository[User]):
             user.locked_until = lockout_until
 
         await self._session.commit()
-
         await self._session.refresh(user)
 
         return user
-
-    # ------------------------------------------------------------------
-    # Successful Login
-    # ------------------------------------------------------------------
 
     async def record_successful_login(
         self,
@@ -149,14 +78,9 @@ class UserRepository(AbstractRepository[User]):
         user.last_login_at = login_time
 
         await self._session.commit()
-
         await self._session.refresh(user)
 
         return user
-
-    # ------------------------------------------------------------------
-    # List Users
-    # ------------------------------------------------------------------
 
     async def list_all(
         self,
@@ -185,8 +109,8 @@ class UserRepository(AbstractRepository[User]):
         result = await self._session.execute(
             select(User).where(
                 or_(
-                    User.full_name.ilike(f"%{keyword}%"),
                     User.email.ilike(f"%{keyword}%"),
+                    User.full_name.ilike(f"%{keyword}%"),
                 )
             )
         )

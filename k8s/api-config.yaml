@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aifp-config
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  LOG_JSON: "true"
+  POSTGRES_HOST: "postgres.aifp.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "ai_infra_failure_prediction"
+  REDIS_HOST: "redis.aifp.svc.cluster.local"
+  REDIS_PORT: "6379"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_MINUTES: "10080"
+---
+# Do NOT commit real secret values. Populate via `kubectl create secret`,
+# a sealed-secrets controller, or your cloud secrets manager (recommended)
+# instead of applying this file with real data in it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aifp-secrets
+type: Opaque
+stringData:
+  JWT_SECRET_KEY: "REPLACE_ME"
+  POSTGRES_USER: "REPLACE_ME"
+  POSTGRES_PASSWORD: "REPLACE_ME"
+  REDIS_PASSWORD: "REPLACE_ME"

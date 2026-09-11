@@ -19,7 +19,10 @@ from pydantic import BaseModel, ValidationError
 from app.core.config import settings
 from app.core.exceptions import TokenError
 
-_pwd_context = CryptContext(schemes=[settings.PASSWORD_HASH_SCHEME], deprecated="auto")
+_pwd_context = CryptContext(
+    schemes=[settings.PASSWORD_HASH_SCHEME],
+    deprecated="auto",
+)
 
 
 class TokenType(StrEnum):
@@ -30,7 +33,7 @@ class TokenType(StrEnum):
 class TokenPayload(BaseModel):
     """Validated shape of the JWT claims this service issues and trusts."""
 
-    sub: str  # user id
+    sub: str
     role: str
     jti: str
     type: TokenType
@@ -40,7 +43,7 @@ class TokenPayload(BaseModel):
 
 
 def hash_password(plain_password: str) -> str:
-    """Hash a plaintext password with the configured scheme (bcrypt by default)."""
+    """Hash a plaintext password with the configured scheme."""
     return _pwd_context.hash(plain_password)
 
 
@@ -49,41 +52,74 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return _pwd_context.verify(plain_password, hashed_password)
 
 
-def _create_token(subject: str, role: str, token_type: TokenType, expires_delta: timedelta) -> str:
+def _create_token(
+    subject: str | uuid.UUID,
+    role: str | StrEnum,
+    token_type: TokenType,
+    expires_delta: timedelta,
+) -> str:
+    """Create a JWT with JSON-serializable claims."""
+
     now = datetime.now(timezone.utc)
+
+    # JWT claims must contain JSON-serializable values.
+    subject_str = str(subject)
+    role_str = role.value if isinstance(role, StrEnum) else str(role)
+
     claims: dict[str, Any] = {
-        "sub": subject,
-        "role": role,
+        "sub": subject_str,
+        "role": role_str,
         "jti": str(uuid.uuid4()),
         "type": token_type.value,
         "iat": int(now.timestamp()),
         "exp": int((now + expires_delta).timestamp()),
         "iss": settings.JWT_ISSUER,
     }
-    return jwt.encode(claims, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+    return jwt.encode(
+        claims,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
 
 
-def create_access_token(subject: str, role: str) -> str:
+def create_access_token(
+    subject: str | uuid.UUID,
+    role: str | StrEnum,
+) -> str:
+    """Create an access token for a user."""
     return _create_token(
-        subject, role, TokenType.ACCESS,
+        subject,
+        role,
+        TokenType.ACCESS,
         timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
 
-def create_refresh_token(subject: str, role: str) -> str:
+def create_refresh_token(
+    subject: str | uuid.UUID,
+    role: str | StrEnum,
+) -> str:
+    """Create a refresh token for a user."""
     return _create_token(
-        subject, role, TokenType.REFRESH,
+        subject,
+        role,
+        TokenType.REFRESH,
         timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES),
     )
 
 
-def decode_token(token: str, *, expected_type: TokenType | None = None) -> TokenPayload:
-    """Decode and validate a JWT, raising `TokenError` on any failure.
+def decode_token(
+    token: str,
+    *,
+    expected_type: TokenType | None = None,
+) -> TokenPayload:
+    """Decode and validate a JWT.
 
-    Validates signature, issuer, expiry (handled internally by `jose`),
-    payload shape, and optionally the token "type" claim so an access
-    token cannot be replayed as a refresh token or vice versa.
+    Validates signature, issuer, expiry, payload shape, and optionally
+    the token type.
     """
+
     try:
         raw_claims = jwt.decode(
             token,
@@ -100,6 +136,8 @@ def decode_token(token: str, *, expected_type: TokenType | None = None) -> Token
         raise TokenError("Token payload is malformed.") from exc
 
     if expected_type is not None and payload.type != expected_type:
-        raise TokenError(f"Expected a {expected_type.value} token.")
+        raise TokenError(
+            f"Expected a {expected_type.value} token."
+        )
 
     return payload

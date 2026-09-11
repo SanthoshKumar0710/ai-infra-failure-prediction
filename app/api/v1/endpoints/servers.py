@@ -34,7 +34,7 @@ router = APIRouter(
     "",
     response_model=ServerRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.OPERATOR))],
 )
 async def create_server(
     payload: ServerCreate,
@@ -58,7 +58,7 @@ async def create_server(
 @router.get(
     "",
     response_model=list[ServerRead],
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.VIEWER))],
 )
 async def list_servers(
     repository: Annotated[
@@ -89,7 +89,7 @@ async def list_servers(
 @router.get(
     "/{server_id}",
     response_model=ServerRead,
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.VIEWER))],
 )
 async def get_server(
     server_id: uuid.UUID,
@@ -113,7 +113,7 @@ async def get_server(
 @router.put(
     "/{server_id}",
     response_model=ServerRead,
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.OPERATOR))],
 )
 async def update_server(
     server_id: uuid.UUID,
@@ -123,6 +123,7 @@ async def update_server(
         Depends(get_server_repository),
     ],
 ) -> ServerRead:
+
 
     service = ServerService(repository)
 

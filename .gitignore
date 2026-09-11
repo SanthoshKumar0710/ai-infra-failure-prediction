@@ -15,3 +15,9 @@ mlruns/
 .DS_Store
 dist/
 build/
+node_modules/
+.cache/
+.local/
+.dist/
+frontend - backup/
+*_backup.pkl

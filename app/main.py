@@ -74,8 +74,60 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["Health"])
     async def health() -> dict[str, str]:
-        """Liveness/readiness probe target for Docker/Kubernetes."""
+        """Backwards compatible health probe."""
         return {"status": "ok"}
+
+    @app.get("/health/live", tags=["Health"])
+    async def health_live() -> dict[str, str]:
+        """Liveness probe: confirms application process is running."""
+        return {"status": "alive"}
+
+    @app.get("/health/ready", tags=["Health"])
+    async def health_ready():
+        """Readiness probe: verifies database, redis, and ML model availability."""
+        from fastapi.responses import JSONResponse
+        from ml.model_loader import load_model
+
+        health_status = {
+            "status": "ready",
+            "database": "unknown",
+            "redis": "unknown",
+            "ml_model": "unknown",
+        }
+        all_ok = True
+
+        # Check DB
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            health_status["database"] = "ok"
+        except Exception as exc:
+            health_status["database"] = f"error: {exc}"
+            all_ok = False
+
+        # Check Redis
+        try:
+            redis = get_redis()
+            await redis.ping()
+            health_status["redis"] = "ok"
+        except Exception as exc:
+            health_status["redis"] = f"error: {exc}"
+            all_ok = False
+
+        # Check ML model
+        try:
+            load_model()
+            health_status["ml_model"] = "ok"
+        except Exception as exc:
+            health_status["ml_model"] = f"error: {exc}"
+            all_ok = False
+
+        if not all_ok:
+            health_status["status"] = "not_ready"
+            return JSONResponse(status_code=503, content=health_status)
+
+        return health_status
+
 
     return app
 

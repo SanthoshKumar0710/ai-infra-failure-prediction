@@ -22,8 +22,13 @@ from app.db.session import Base
 # ------------------------------------------------------------------
 # Import ALL SQLAlchemy models here
 # ------------------------------------------------------------------
-from app.models.user import User  # noqa: F401
-from app.models.server import Server  # noqa: F401
+from app.models.user import User          # noqa: F401
+from app.models.server import Server      # noqa: F401
+from app.models.metric import Metric      # noqa: F401
+from app.models.prediction import Prediction  # noqa: F401
+from app.models.alert import Alert        # noqa: F401
+
+
 
 # ------------------------------------------------------------------
 # Alembic Configuration
@@ -47,7 +52,7 @@ target_metadata = Base.metadata
 # ------------------------------------------------------------------
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode."""
+    """Run migrations in offline mode."""
 
     url = config.get_main_option("sqlalchemy.url")
 

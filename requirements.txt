@@ -31,9 +31,8 @@ aiosqlite==0.20.0
 fakeredis==2.26.2
 pytest-cov==6.0.0
 
-# ------------------------------------------------------------------------
-# NOTE: Kafka (aiokafka), Airflow, MLflow, PyTorch, XGBoost, scikit-learn,
-# LightGBM, SHAP, and Plotly are declared in their respective modules'
-# requirements (Module 3 onward) to keep Module 1's install surface (and
-# CI runtime) minimal. They will be merged into this file / split into
-# requirements/{base,ml,dev}.txt as those modules land.
+# --- Machine Learning ---------------------------------------------------
+pandas==2.2.3
+scikit-learn==1.6.0
+joblib==1.4.2
+

@@ -1,0 +1,27 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #05060b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #34364b;
+  border-radius: 20px;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.4);
+}

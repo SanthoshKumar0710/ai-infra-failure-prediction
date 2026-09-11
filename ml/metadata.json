@@ -1,0 +1,35 @@
+{
+  "model_version": "v1.0",
+  "algorithm": "RandomForestClassifier",
+  "trained_at": "2026-08-21T06:36:09.710881+00:00",
+  "feature_columns": [
+    "cpu_usage",
+    "memory_usage",
+    "disk_usage",
+    "network_usage",
+    "temperature",
+    "running_processes",
+    "disk_read_speed",
+    "disk_write_speed",
+    "swap_usage",
+    "network_latency",
+    "packet_loss",
+    "uptime_hours",
+    "error_logs",
+    "warning_logs",
+    "critical_logs",
+    "power_consumption",
+    "gpu_usage",
+    "fan_speed"
+  ],
+  "dataset_type": "synthetic",
+  "dataset_rows": 20000,
+  "metrics": {
+    "accuracy": 0.9898,
+    "precision": 0.9946,
+    "recall": 0.9623,
+    "f1": 0.9782,
+    "roc_auc": 0.9994
+  },
+  "note": "Trained on synthetic infrastructure dataset for failure prediction."
+}

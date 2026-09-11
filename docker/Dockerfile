@@ -24,6 +24,7 @@ COPY --from=builder /install /usr/local
 
 WORKDIR /app
 COPY app ./app
+COPY ml ./ml
 COPY alembic ./alembic
 COPY alembic.ini .
 
@@ -35,7 +36,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/health/live || exit 1
+
 
 CMD ["gunicorn", "app.main:app", \
      "--workers", "4", \

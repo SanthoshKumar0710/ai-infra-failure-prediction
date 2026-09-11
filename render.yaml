@@ -30,4 +30,4 @@ databases:
     plan: free
     region: oregon
     databaseName: ai_infra_failure_prediction
-    user: postgres
+    user: ai_infra_user

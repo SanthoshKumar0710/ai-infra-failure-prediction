@@ -55,7 +55,11 @@ class AuthService:
         if existing is not None:
             raise UserAlreadyExistsError()
 
-        role = payload.role if isinstance(payload, UserAdminCreate) else UserRole.VIEWER
+        if isinstance(payload, UserAdminCreate):
+            role = payload.role
+        else:
+            existing_users = await self._users.list_all(limit=1)
+            role = UserRole.ADMIN if len(existing_users) == 0 else UserRole.VIEWER
 
         user = User(
             email=payload.email.lower(),

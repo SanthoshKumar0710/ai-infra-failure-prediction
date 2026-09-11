@@ -10,22 +10,43 @@ import {
   Lock,
   ArrowRight,
   User,
+  KeyRound,
+  CheckCircle2,
+  Sparkles,
+  RotateCw,
+  X,
 } from "lucide-react";
 
-import { loginUser, registerUser, resetPassword } from "../api/auth";
+import {
+  loginUser,
+  registerUser,
+  sendPasswordResetOtp,
+  verifyOtpAndLogin,
+  loginWithGoogle,
+} from "../api/auth";
 
 function Login({ onLogin }) {
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
+  const [otpStep, setOtpStep] = useState(1); // 1 = enter email, 2 = enter OTP & reset
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [devOtpNotice, setDevOtpNotice] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
 
+  // Google Sign-In state
+  const [googleModalOpen, setGoogleModalOpen] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState("");
+  const [googleName, setGoogleName] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Standard Login / Register form submission
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -37,22 +58,13 @@ function Login({ onLogin }) {
         await loginUser(email, password);
         onLogin();
       } else if (mode === "register") {
-        await registerUser(email, fullName, password);
-        setSuccess(
-          "Account created! You can now log in."
-        );
-        setMode("login");
-        setPassword("");
-      } else if (mode === "forgot") {
         if (password !== confirmPassword) {
           setError("Passwords do not match.");
           setLoading(false);
           return;
         }
-        await resetPassword(email, password);
-        setSuccess(
-          "Password reset successfully! Please sign in with your new password."
-        );
+        await registerUser(email, fullName, password);
+        setSuccess("Account created successfully! You can now log in.");
         setMode("login");
         setPassword("");
         setConfirmPassword("");
@@ -64,13 +76,156 @@ function Login({ onLogin }) {
         err.message ||
         "Something went wrong.";
 
-      setError(
-        typeof detail === "string"
-          ? detail
-          : JSON.stringify(detail)
-      );
+      setError(typeof detail === "string" ? detail : JSON.stringify(detail));
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Send 6-digit OTP to user's email
+  async function handleSendOtp(e) {
+    e.preventDefault();
+    if (!email) {
+      setError("Please enter your registered email address.");
+      return;
+    }
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const res = await sendPasswordResetOtp(email);
+      setSuccess(res.message || `Verification OTP sent to ${email}`);
+      if (res.dev_otp) {
+        setDevOtpNotice(res.dev_otp);
+      }
+      setOtpStep(2);
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail ||
+        err.response?.data?.error_code ||
+        err.message ||
+        "Failed to send verification code.";
+      setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Resend OTP button
+  async function handleResendOtp() {
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const res = await sendPasswordResetOtp(email);
+      setSuccess(res.message || `A new verification code was sent to ${email}`);
+      if (res.dev_otp) {
+        setDevOtpNotice(res.dev_otp);
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || "Could not resend verification code.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Verify OTP, update password, and auto-login
+  async function handleVerifyOtpAndLogin(e) {
+    e.preventDefault();
+    if (!otp || otp.trim().length !== 6) {
+      setError("Please enter the complete 6-digit OTP code.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      await verifyOtpAndLogin(email, otp.trim(), password);
+      setSuccess("Verification successful! Logging you in...");
+      // Auto-login into dashboard immediately
+      setTimeout(() => {
+        onLogin();
+      }, 400);
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail ||
+        err.response?.data?.error_code ||
+        err.message ||
+        "Invalid or expired OTP code.";
+      setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+      setLoading(false);
+    }
+  }
+
+  // Trigger Google Sign-In
+  async function handleGoogleClick() {
+    setError("");
+    setSuccess("");
+
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    // If client ID is configured and Google SDK script is ready, trigger official Google One-Tap/Popup
+    if (clientId && window.google?.accounts?.id) {
+      setGoogleLoading(true);
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: async (response) => {
+            try {
+              await loginWithGoogle({ id_token: response.credential });
+              onLogin();
+            } catch (err) {
+              setError(err.response?.data?.detail || "Google authentication failed.");
+            } finally {
+              setGoogleLoading(false);
+            }
+          },
+        });
+        window.google.accounts.id.prompt();
+        return;
+      } catch {
+        setGoogleLoading(false);
+      }
+    }
+
+    // Default seamless Google Sign-In dialog
+    setGoogleEmail(email || "");
+    setGoogleName(fullName || "");
+    setGoogleModalOpen(true);
+  }
+
+  // Submit Google Sign-In dialog
+  async function handleGoogleModalSubmit(e) {
+    e.preventDefault();
+    if (!googleEmail) return;
+
+    setError("");
+    setGoogleLoading(true);
+
+    try {
+      await loginWithGoogle({
+        email: googleEmail,
+        name: googleName || googleEmail.split("@")[0],
+      });
+      setGoogleModalOpen(false);
+      onLogin();
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail ||
+        err.response?.data?.error_code ||
+        err.message ||
+        "Google authentication failed.";
+      setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -258,7 +413,7 @@ function Login({ onLogin }) {
           background: rgba(11, 17, 33, 0.72);
           border: 1px solid rgba(255, 255, 255, 0.09);
           border-radius: 24px;
-          padding: 44px 40px;
+          padding: 40px 38px;
           box-shadow:
             0 25px 65px -12px rgba(0, 0, 0, 0.7),
             0 0 40px -10px rgba(99, 102, 241, 0.2),
@@ -266,15 +421,16 @@ function Login({ onLogin }) {
           backdrop-filter: blur(28px);
           -webkit-backdrop-filter: blur(28px);
           box-sizing: border-box;
+          position: relative;
         }
 
         .infrasafe-card-header {
           text-align: center;
-          margin-bottom: 30px;
+          margin-bottom: 26px;
         }
 
         .infrasafe-card-header h2 {
-          font-size: 28px;
+          font-size: 27px;
           font-weight: 700;
           color: #ffffff;
           margin: 0 0 8px 0;
@@ -285,6 +441,62 @@ function Login({ onLogin }) {
           font-size: 14px;
           color: #94a3b8;
           margin: 0;
+          line-height: 1.5;
+        }
+
+        /* Google button */
+        .infrasafe-google-btn {
+          width: 100%;
+          height: 48px;
+          border: 1px solid rgba(255, 255, 255, 0.13);
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.05);
+          color: #f8fafc;
+          font-size: 14.5px;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-sizing: border-box;
+        }
+
+        .infrasafe-google-btn:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.09);
+          border-color: rgba(255, 255, 255, 0.25);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .infrasafe-google-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        /* Divider */
+        .infrasafe-divider {
+          display: flex;
+          align-items: center;
+          text-align: center;
+          margin: 22px 0 20px 0;
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+
+        .infrasafe-divider::before,
+        .infrasafe-divider::after {
+          content: "";
+          flex: 1;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .infrasafe-divider span {
+          padding: 0 14px;
         }
 
         /* Alert notifications */
@@ -296,6 +508,7 @@ function Login({ onLogin }) {
           border-radius: 12px;
           font-size: 13px;
           margin-bottom: 20px;
+          line-height: 1.4;
         }
 
         .infrasafe-alert.error {
@@ -310,17 +523,23 @@ function Login({ onLogin }) {
           color: #6ee7b7;
         }
 
+        .infrasafe-alert.info {
+          background: rgba(99, 102, 241, 0.12);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          color: #a5b4fc;
+        }
+
         /* Form elements */
         .infrasafe-form {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 18px;
         }
 
         .infrasafe-field {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 7px;
         }
 
         .infrasafe-field label {
@@ -369,14 +588,14 @@ function Login({ onLogin }) {
           color: #64748b;
         }
 
-        .infrasafe-input-wrap input:-webkit-autofill,
-        .infrasafe-input-wrap input:-webkit-autofill:hover,
-        .infrasafe-input-wrap input:-webkit-autofill:focus,
-        .infrasafe-input-wrap input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 1000px #090e1d inset !important;
-          -webkit-text-fill-color: #ffffff !important;
-          caret-color: #ffffff !important;
-          transition: background-color 5000s ease-in-out 0s;
+        .infrasafe-input-wrap input.otp-code-input {
+          padding: 0 16px;
+          text-align: center;
+          font-size: 22px;
+          letter-spacing: 0.4em;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-weight: 700;
+          color: #a5b4fc;
         }
 
         .infrasafe-eye-btn {
@@ -410,7 +629,7 @@ function Login({ onLogin }) {
           justify-content: space-between;
           font-size: 13px;
           color: #94a3b8;
-          margin-top: -4px;
+          margin-top: -2px;
         }
 
         .infrasafe-checkbox-label {
@@ -499,7 +718,7 @@ function Login({ onLogin }) {
 
         /* Footer toggle */
         .infrasafe-card-footer {
-          margin-top: 24px;
+          margin-top: 22px;
           text-align: center;
           font-size: 13.5px;
           color: #94a3b8;
@@ -519,6 +738,71 @@ function Login({ onLogin }) {
         .infrasafe-switch-btn:hover {
           color: #93c5fd;
           text-decoration: underline;
+        }
+
+        .infrasafe-resend-link {
+          background: transparent;
+          border: 0;
+          color: #818cf8;
+          font-size: 13px;
+          cursor: pointer;
+          padding: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: color 0.2s ease;
+        }
+
+        .infrasafe-resend-link:hover {
+          color: #a5b4fc;
+          text-decoration: underline;
+        }
+
+        /* Google Modal */
+        .infrasafe-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(4, 7, 17, 0.75);
+          backdrop-filter: blur(10px);
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          z-index: 1000;
+          animation: fadeIn 0.2s ease;
+        }
+
+        .infrasafe-modal-box {
+          width: 100%;
+          max-width: 440px;
+          background: #0b1121;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 20px;
+          padding: 32px;
+          box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.8), 0 0 30px rgba(99, 102, 241, 0.15);
+          position: relative;
+        }
+
+        .infrasafe-modal-close {
+          position: absolute;
+          top: 18px;
+          right: 18px;
+          background: transparent;
+          border: 0;
+          color: #64748b;
+          cursor: pointer;
+          padding: 4px;
+        }
+
+        .infrasafe-modal-close:hover {
+          color: #ffffff;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.97); }
+          to { opacity: 1; transform: scale(1); }
         }
 
         /* Responsive Breakpoints */
@@ -555,7 +839,7 @@ function Login({ onLogin }) {
           }
 
           .infrasafe-login-card {
-            padding: 32px 22px;
+            padding: 30px 20px;
             border-radius: 20px;
           }
 
@@ -629,7 +913,7 @@ function Login({ onLogin }) {
           </div>
         </div>
 
-        {/* Right Login Card */}
+        {/* Right Login / Register / Forgot Password Card */}
         <div className="infrasafe-card-wrap">
           <div className="infrasafe-login-card">
             <div className="infrasafe-card-header">
@@ -638,14 +922,18 @@ function Login({ onLogin }) {
                   ? "Welcome Back"
                   : mode === "register"
                   ? "Create Account"
-                  : "Reset Password"}
+                  : otpStep === 1
+                  ? "Reset Password"
+                  : "Verify OTP & Sign In"}
               </h2>
               <p>
                 {mode === "login"
-                  ? "Sign in to your InfraSafe AI dashboard"
+                  ? "Sign in with your Email or Google Account"
                   : mode === "register"
-                  ? "Register a new account to get started."
-                  : "Enter your registered email and choose a new password."}
+                  ? "Register using your Email or Google Account"
+                  : otpStep === 1
+                  ? "Enter your email to receive a 6-digit verification code"
+                  : `Enter the 6-digit code sent to ${email} to reset password and login`}
               </p>
             </div>
 
@@ -658,102 +946,311 @@ function Login({ onLogin }) {
 
             {success && (
               <div className="infrasafe-alert success">
+                <CheckCircle2 size={18} />
                 <span>{success}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="infrasafe-form">
-              {mode === "register" && (
+            {devOtpNotice && mode === "forgot" && otpStep === 2 && (
+              <div className="infrasafe-alert info">
+                <Sparkles size={18} />
+                <span>
+                  <strong>Verification Code:</strong> {devOtpNotice}
+                </span>
+              </div>
+            )}
+
+            {/* Google Sign-In Button (shown for Login & Register) */}
+            {mode !== "forgot" && (
+              <>
+                <button
+                  type="button"
+                  className="infrasafe-google-btn"
+                  onClick={handleGoogleClick}
+                  disabled={googleLoading || loading}
+                >
+                  <svg width="19" height="19" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <span>
+                    {googleLoading
+                      ? "Connecting to Google..."
+                      : mode === "login"
+                      ? "Continue with Google"
+                      : "Sign up with Google"}
+                  </span>
+                </button>
+
+                <div className="infrasafe-divider">
+                  <span>or continue with email</span>
+                </div>
+              </>
+            )}
+
+            {/* Form: LOGIN & REGISTER */}
+            {mode !== "forgot" && (
+              <form onSubmit={handleSubmit} className="infrasafe-form">
+                {mode === "register" && (
+                  <div className="infrasafe-field">
+                    <label htmlFor="fullName">Full Name</label>
+                    <div className="infrasafe-input-wrap">
+                      <span className="infrasafe-input-icon">
+                        <User size={18} />
+                      </span>
+                      <input
+                        id="fullName"
+                        type="text"
+                        placeholder="John Doe"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        required
+                        autoComplete="name"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="infrasafe-field">
-                  <label htmlFor="fullName">Full Name</label>
+                  <label htmlFor="email">Email Address</label>
                   <div className="infrasafe-input-wrap">
                     <span className="infrasafe-input-icon">
-                      <User size={18} />
+                      <Mail size={18} />
                     </span>
                     <input
-                      id="fullName"
-                      type="text"
-                      placeholder="John Doe"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      id="email"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       required
-                      autoComplete="name"
+                      autoComplete="email"
                     />
                   </div>
                 </div>
-              )}
 
-              <div className="infrasafe-field">
-                <label htmlFor="email">Email Address</label>
-                <div className="infrasafe-input-wrap">
-                  <span className="infrasafe-input-icon">
-                    <Mail size={18} />
-                  </span>
-                  <input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    autoComplete="email"
-                  />
-                </div>
-              </div>
-
-              <div className="infrasafe-field">
-                <label htmlFor="password">
-                  {mode === "forgot" ? "New Password" : "Password"}
-                </label>
-                <div className="infrasafe-input-wrap">
-                  <span className="infrasafe-input-icon">
-                    <Lock size={18} />
-                  </span>
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder={
-                      mode === "forgot"
-                        ? "Enter your new password"
-                        : "Enter your password"
-                    }
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={8}
-                    autoComplete={
-                      mode === "login"
-                        ? "current-password"
-                        : "new-password"
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="infrasafe-eye-btn"
-                    onClick={() => setShowPassword(!showPassword)}
-                    tabIndex={-1}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-
-                {(mode === "register" || mode === "forgot") && (
-                  <small className="infrasafe-helper-hint">
-                    Min 8 characters (recommended with uppercase, lowercase, digit, and symbol).
-                  </small>
-                )}
-              </div>
-
-              {mode === "forgot" && (
                 <div className="infrasafe-field">
-                  <label htmlFor="confirmPassword">Confirm New Password</label>
+                  <label htmlFor="password">Password</label>
                   <div className="infrasafe-input-wrap">
                     <span className="infrasafe-input-icon">
                       <Lock size={18} />
                     </span>
                     <input
-                      id="confirmPassword"
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      autoComplete={
+                        mode === "login" ? "current-password" : "new-password"
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="infrasafe-eye-btn"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+
+                  {mode === "register" && (
+                    <small className="infrasafe-helper-hint">
+                      Min 8 characters (recommended with uppercase, lowercase, digit, and symbol).
+                    </small>
+                  )}
+                </div>
+
+                {mode === "register" && (
+                  <div className="infrasafe-field">
+                    <label htmlFor="confirmPassword">Confirm Password</label>
+                    <div className="infrasafe-input-wrap">
+                      <span className="infrasafe-input-icon">
+                        <Lock size={18} />
+                      </span>
+                      <input
+                        id="confirmPassword"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Re-enter your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {mode === "login" && (
+                  <div className="infrasafe-row-controls">
+                    <label className="infrasafe-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                      />
+                      <span>Remember me</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      className="infrasafe-forgot-btn"
+                      onClick={() => {
+                        setMode("forgot");
+                        setOtpStep(1);
+                        setError("");
+                        setSuccess("");
+                        setDevOtpNotice("");
+                        setPassword("");
+                        setConfirmPassword("");
+                        setOtp("");
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="infrasafe-submit-btn"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div className="loading-spinner small" />
+                  ) : mode === "login" ? (
+                    <>
+                      <span>Sign In with Email</span>
+                      <ArrowRight size={18} />
+                    </>
+                  ) : (
+                    <>
+                      <span>Create Account</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Form: FORGOT PASSWORD - STEP 1 (Request OTP) */}
+            {mode === "forgot" && otpStep === 1 && (
+              <form onSubmit={handleSendOtp} className="infrasafe-form">
+                <div className="infrasafe-field">
+                  <label htmlFor="resetEmail">Registered Email Address</label>
+                  <div className="infrasafe-input-wrap">
+                    <span className="infrasafe-input-icon">
+                      <Mail size={18} />
+                    </span>
+                    <input
+                      id="resetEmail"
+                      type="email"
+                      placeholder="Enter your registered email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                      autoFocus
+                    />
+                  </div>
+                  <small className="infrasafe-helper-hint">
+                    A secure 6-digit verification code will be dispatched to this email.
+                  </small>
+                </div>
+
+                <button
+                  type="submit"
+                  className="infrasafe-submit-btn"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div className="loading-spinner small" />
+                  ) : (
+                    <>
+                      <span>Send OTP Code</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Form: FORGOT PASSWORD - STEP 2 (Verify OTP & Reset & Auto-Login) */}
+            {mode === "forgot" && otpStep === 2 && (
+              <form onSubmit={handleVerifyOtpAndLogin} className="infrasafe-form">
+                <div className="infrasafe-field">
+                  <label htmlFor="otpCode">6-Digit Verification Code (OTP)</label>
+                  <div className="infrasafe-input-wrap">
+                    <input
+                      id="otpCode"
+                      className="otp-code-input"
+                      type="text"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                      required
+                      autoFocus
+                      autoComplete="one-time-code"
+                    />
+                  </div>
+                </div>
+
+                <div className="infrasafe-field">
+                  <label htmlFor="newPassword">New Password</label>
+                  <div className="infrasafe-input-wrap">
+                    <span className="infrasafe-input-icon">
+                      <KeyRound size={18} />
+                    </span>
+                    <input
+                      id="newPassword"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your new password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="infrasafe-eye-btn"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="infrasafe-field">
+                  <label htmlFor="confirmNewPassword">Confirm New Password</label>
+                  <div className="infrasafe-input-wrap">
+                    <span className="infrasafe-input-icon">
+                      <Lock size={18} />
+                    </span>
+                    <input
+                      id="confirmNewPassword"
                       type={showPassword ? "text" : "password"}
                       placeholder="Confirm your new password"
                       value={confirmPassword}
@@ -764,59 +1261,49 @@ function Login({ onLogin }) {
                     />
                   </div>
                 </div>
-              )}
 
-              {mode === "login" && (
                 <div className="infrasafe-row-controls">
-                  <label className="infrasafe-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                    />
-                    <span>Remember me</span>
-                  </label>
+                  <button
+                    type="button"
+                    className="infrasafe-resend-link"
+                    onClick={handleResendOtp}
+                    disabled={loading}
+                  >
+                    <RotateCw size={14} />
+                    <span>Resend OTP Code</span>
+                  </button>
 
                   <button
                     type="button"
                     className="infrasafe-forgot-btn"
                     onClick={() => {
-                      setMode("forgot");
+                      setOtpStep(1);
                       setError("");
                       setSuccess("");
                     }}
                   >
-                    Forgot password?
+                    Change email
                   </button>
                 </div>
-              )}
 
-              <button
-                type="submit"
-                className="infrasafe-submit-btn"
-                disabled={loading}
-              >
-                {loading ? (
-                  <div className="loading-spinner small" />
-                ) : mode === "login" ? (
-                  <>
-                    <span>Sign In</span>
-                    <ArrowRight size={18} />
-                  </>
-                ) : mode === "register" ? (
-                  <>
-                    <span>Create Account</span>
-                    <ArrowRight size={18} />
-                  </>
-                ) : (
-                  <>
-                    <span>Reset Password</span>
-                    <ArrowRight size={18} />
-                  </>
-                )}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  className="infrasafe-submit-btn"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div className="loading-spinner small" />
+                  ) : (
+                    <>
+                      <span>Verify OTP & Log In</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
 
+            {/* Footer Navigation */}
             <div className="infrasafe-card-footer">
               {mode === "login" ? (
                 <p>
@@ -828,6 +1315,7 @@ function Login({ onLogin }) {
                       setMode("register");
                       setError("");
                       setSuccess("");
+                      setDevOtpNotice("");
                     }}
                   >
                     Sign up
@@ -843,6 +1331,7 @@ function Login({ onLogin }) {
                       setMode("login");
                       setError("");
                       setSuccess("");
+                      setDevOtpNotice("");
                     }}
                   >
                     Sign in
@@ -858,6 +1347,7 @@ function Login({ onLogin }) {
                       setMode("login");
                       setError("");
                       setSuccess("");
+                      setDevOtpNotice("");
                     }}
                   >
                     Back to Sign In
@@ -868,9 +1358,113 @@ function Login({ onLogin }) {
           </div>
         </div>
       </div>
+
+      {/* Interactive Google Sign-In Dialog (for direct one-click / demo login) */}
+      {googleModalOpen && (
+        <div className="infrasafe-modal-overlay">
+          <div className="infrasafe-modal-box">
+            <button
+              type="button"
+              className="infrasafe-modal-close"
+              onClick={() => setGoogleModalOpen(false)}
+            >
+              <X size={20} />
+            </button>
+
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: "rgba(255,255,255,0.06)",
+                  display: "grid",
+                  placeItems: "center",
+                  margin: "0 auto 12px auto",
+                }}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+              </div>
+              <h3 style={{ margin: "0 0 6px 0", fontSize: 20, color: "#fff" }}>
+                Sign in with Google
+              </h3>
+              <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
+                Authenticate directly with your Google Workspace or Gmail account
+              </p>
+            </div>
+
+            <form onSubmit={handleGoogleModalSubmit} className="infrasafe-form">
+              <div className="infrasafe-field">
+                <label htmlFor="googleEmailInput">Google Email Address</label>
+                <div className="infrasafe-input-wrap">
+                  <span className="infrasafe-input-icon">
+                    <Mail size={18} />
+                  </span>
+                  <input
+                    id="googleEmailInput"
+                    type="email"
+                    placeholder="user@gmail.com"
+                    value={googleEmail}
+                    onChange={(e) => setGoogleEmail(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="infrasafe-field">
+                <label htmlFor="googleNameInput">Display Name (Optional)</label>
+                <div className="infrasafe-input-wrap">
+                  <span className="infrasafe-input-icon">
+                    <User size={18} />
+                  </span>
+                  <input
+                    id="googleNameInput"
+                    type="text"
+                    placeholder="Google User Name"
+                    value={googleName}
+                    onChange={(e) => setGoogleName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="infrasafe-submit-btn"
+                disabled={googleLoading}
+              >
+                {googleLoading ? (
+                  <div className="loading-spinner small" />
+                ) : (
+                  <>
+                    <span>Confirm & Sign In with Google</span>
+                    <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default Login;
-

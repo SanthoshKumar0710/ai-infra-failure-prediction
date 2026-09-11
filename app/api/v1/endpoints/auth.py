@@ -8,11 +8,46 @@ from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import CurrentUser, get_auth_service, oauth2_scheme
-from app.schemas.auth import PasswordResetRequest, RefreshRequest, TokenPair
+from app.schemas.auth import (
+    GoogleAuthRequest,
+    PasswordResetRequest,
+    RefreshRequest,
+    SendOtpRequest,
+    SendOtpResponse,
+    TokenPair,
+    VerifyOtpRequest,
+)
 from app.schemas.user import UserCreate, UserRead
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/forgot-password/send-otp", response_model=SendOtpResponse)
+async def send_forgot_password_otp(
+    payload: SendOtpRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> SendOtpResponse:
+    """Send a 6-digit OTP code to the user's registered email for password reset."""
+    return await auth_service.send_password_reset_otp(payload.email)
+
+
+@router.post("/forgot-password/verify-otp", response_model=TokenPair)
+async def verify_otp_and_login(
+    payload: VerifyOtpRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> TokenPair:
+    """Verify OTP, update password, and immediately issue session tokens to log in automatically."""
+    return await auth_service.verify_otp_and_reset(payload.email, payload.otp, payload.new_password)
+
+
+@router.post("/google", response_model=TokenPair)
+async def google_login(
+    payload: GoogleAuthRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> TokenPair:
+    """Authenticate or register via Google account and issue session token pair."""
+    return await auth_service.authenticate_google(payload)
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)

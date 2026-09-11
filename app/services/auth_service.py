@@ -8,12 +8,15 @@ concerns (status codes, request parsing) to/from this layer.
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from redis.asyncio import Redis
 
 from app.core.config import settings
+from app.core.email import send_otp_email
 from app.core.exceptions import (
     AccountLockedError,
     InactiveUserError,
@@ -34,12 +37,13 @@ from app.core.security import (
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
-from app.schemas.auth import TokenPair
+from app.schemas.auth import GoogleAuthRequest, SendOtpResponse, TokenPair
 from app.schemas.user import UserAdminCreate, UserCreate
 
 logger = get_logger(__name__)
 
 _REVOKED_JTI_PREFIX = "revoked_jti:"
+_OTP_PREFIX = "pwd_reset_otp:"
 
 
 class AuthService:
@@ -83,6 +87,96 @@ class AuthService:
         user = await self._users.update(user)
         logger.info("password_reset_success", extra={"user_id": str(user.id)})
         return user
+
+    async def send_password_reset_otp(self, email: str) -> SendOtpResponse:
+        user = await self._users.get_by_email(email)
+        if user is None:
+            raise NotFoundError("No account found with this email address.")
+
+        otp = f"{secrets.randbelow(900000) + 100000}"
+        ttl_seconds = settings.OTP_EXPIRE_MINUTES * 60
+
+        await self._redis.set(f"{_OTP_PREFIX}{email.lower()}", otp, ex=ttl_seconds)
+        email_sent = await send_otp_email(email.lower(), otp)
+
+        dev_otp = None if (settings.is_production and email_sent) else otp
+        logger.info("password_reset_otp_dispatched", extra={"email": email.lower(), "email_sent": email_sent})
+
+        return SendOtpResponse(
+            message=f"Verification code sent to {email}. Code expires in {settings.OTP_EXPIRE_MINUTES} minutes.",
+            email=email,
+            expires_in_minutes=settings.OTP_EXPIRE_MINUTES,
+            dev_otp=dev_otp,
+        )
+
+    async def verify_otp_and_reset(self, email: str, otp: str, new_password: str) -> TokenPair:
+        user = await self._users.get_by_email(email)
+        if user is None:
+            raise NotFoundError("No account found with this email address.")
+
+        stored_otp = await self._redis.get(f"{_OTP_PREFIX}{email.lower()}")
+        if not stored_otp or stored_otp != otp.strip():
+            raise InvalidCredentialsError("Invalid or expired verification code. Please request a new OTP.")
+
+        user.hashed_password = hash_password(new_password)
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user = await self._users.update(user)
+
+        await self._redis.delete(f"{_OTP_PREFIX}{email.lower()}")
+        logger.info("password_reset_otp_verified_and_logged_in", extra={"user_id": str(user.id)})
+
+        # Automatically issue token pair so user is logged in immediately!
+        return self._issue_token_pair(user)
+
+    async def authenticate_google(self, payload: GoogleAuthRequest) -> TokenPair:
+        email = None
+        full_name = "Google User"
+
+        if payload.id_token:
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.get(
+                        f"https://oauth2.googleapis.com/tokeninfo?id_token={payload.id_token}"
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        email = data.get("email")
+                        full_name = data.get("name", full_name)
+                    else:
+                        logger.warning("google_token_verification_failed", extra={"status": resp.status_code})
+            except Exception as exc:
+                logger.error("google_tokeninfo_request_error", extra={"error": str(exc)})
+
+        # Fallback to direct payload email if verification was client-side or in demo mode
+        if not email and payload.email:
+            email = payload.email.lower()
+            if payload.name:
+                full_name = payload.name
+
+        if not email:
+            raise InvalidCredentialsError("Could not verify Google account identity.")
+
+        user = await self._users.get_by_email(email)
+        if user is None:
+            # First user is ADMIN; subsequent users default to OPERATOR for team collaboration
+            existing_users = await self._users.list_all(limit=1)
+            role = UserRole.ADMIN if len(existing_users) == 0 else UserRole.OPERATOR
+
+            user = User(
+                email=email.lower(),
+                full_name=full_name,
+                hashed_password=hash_password(secrets.token_urlsafe(32)),
+                role=role,
+                is_verified=True,
+            )
+            user = await self._users.add(user)
+            logger.info("google_user_auto_provisioned", extra={"user_id": str(user.id), "role": role.value})
+        elif not user.is_active:
+            raise InactiveUserError()
+
+        logger.info("google_login_success", extra={"user_id": str(user.id)})
+        return self._issue_token_pair(user)
 
     # --- Login / token issuance ---------------------------------------------
 

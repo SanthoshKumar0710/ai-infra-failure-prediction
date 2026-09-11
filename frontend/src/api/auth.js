@@ -66,7 +66,7 @@ export async function getMe() {
 }
 
 // ============================================================
-// RESET PASSWORD
+// RESET PASSWORD (LEGACY DIRECT)
 // ============================================================
 
 export async function resetPassword(email, newPassword) {
@@ -74,5 +74,52 @@ export async function resetPassword(email, newPassword) {
     email,
     new_password: newPassword,
   });
+  return response.data;
+}
+
+// ============================================================
+// FORGOT PASSWORD VIA EMAIL OTP
+// ============================================================
+
+export async function sendPasswordResetOtp(email) {
+  const response = await api.post("/auth/forgot-password/send-otp", {
+    email,
+  });
+  return response.data;
+}
+
+export async function verifyOtpAndLogin(email, otp, newPassword) {
+  const response = await api.post("/auth/forgot-password/verify-otp", {
+    email,
+    otp,
+    new_password: newPassword,
+  });
+
+  const { access_token, refresh_token } = response.data;
+  if (access_token) {
+    localStorage.setItem("access_token", access_token);
+  }
+  if (refresh_token) {
+    localStorage.setItem("refresh_token", refresh_token);
+  }
+
+  return response.data;
+}
+
+// ============================================================
+// GOOGLE AUTH
+// ============================================================
+
+export async function loginWithGoogle(payload) {
+  const response = await api.post("/auth/google", payload);
+
+  const { access_token, refresh_token } = response.data;
+  if (access_token) {
+    localStorage.setItem("access_token", access_token);
+  }
+  if (refresh_token) {
+    localStorage.setItem("refresh_token", refresh_token);
+  }
+
   return response.data;
 }

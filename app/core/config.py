@@ -229,6 +229,23 @@ class Settings(BaseSettings):
     ]
 
     # ============================================================
+    # Google OAuth
+    # ============================================================
+
+    GOOGLE_CLIENT_ID: str | None = None
+
+    # ============================================================
+    # Email / SMTP
+    # ============================================================
+
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str = "noreply@infra-safe.ai"
+    OTP_EXPIRE_MINUTES: int = 10
+
+    # ============================================================
     # Environment helper
     # ============================================================
 

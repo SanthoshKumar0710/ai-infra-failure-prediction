@@ -25,6 +25,29 @@ class PasswordResetRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class SendOtpRequest(BaseModel):
+    email: EmailStr
+
+
+class SendOtpResponse(BaseModel):
+    message: str
+    email: str
+    expires_in_minutes: int
+    dev_otp: str | None = None
+
+
+class VerifyOtpRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(min_length=6, max_length=6, description="6-digit verification code")
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str | None = None
+    email: EmailStr | None = None
+    name: str | None = None
+
+
 class ErrorResponse(BaseModel):
     """Consistent error envelope returned by every 4xx/5xx response."""
 

@@ -145,7 +145,7 @@ class Settings(BaseSettings):
 
     REDIS_PASSWORD: str | None = None
 
-    REDIS_URL: RedisDsn | None = None
+    REDIS_URL: str | RedisDsn | None = None
 
     @field_validator(
         "REDIS_URL",
@@ -159,6 +159,13 @@ class Settings(BaseSettings):
     ) -> str:
 
         if isinstance(v, str) and v:
+            v = v.strip()
+            if v.startswith("REDIS_URL="):
+                v = v[len("REDIS_URL=") :].strip()
+            if (v.startswith('"') and v.endswith('"')) or (
+                v.startswith("'") and v.endswith("'")
+            ):
+                v = v[1:-1].strip()
             return v
 
         data = info.data

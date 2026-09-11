@@ -98,14 +98,12 @@ class AuthService:
         ttl_seconds = settings.OTP_EXPIRE_MINUTES * 60
 
         await self._redis.set(f"{_OTP_PREFIX}{email.lower()}", otp, ex=ttl_seconds)
-        email_sent = await send_otp_email(email.lower(), otp)
+        email_sent, reason = await send_otp_email(email.lower(), otp)
 
         if not email_sent:
             # Delete cached OTP since it was not delivered to the user's email
             await self._redis.delete(f"{_OTP_PREFIX}{email.lower()}")
-            raise EmailDeliveryError(
-                "Unable to deliver OTP email. Please ensure SMTP credentials or RESEND_API_KEY are configured in environment variables."
-            )
+            raise EmailDeliveryError(f"Unable to deliver OTP email: {reason}")
 
         logger.info("password_reset_otp_dispatched", extra={"email": email.lower()})
 

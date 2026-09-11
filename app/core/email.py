@@ -24,10 +24,10 @@ async def _send_resend_email_async(
     recipient: str,
     subject: str,
     html_content: str,
-) -> bool:
+) -> tuple[bool, str]:
     """Send an email using Resend HTTP REST API."""
     if not settings.RESEND_API_KEY:
-        return False
+        return False, "RESEND_API_KEY is not configured."
 
     sender = settings.SMTP_FROM_EMAIL
     # Resend sandbox default if custom domain isn't verified
@@ -39,7 +39,7 @@ async def _send_resend_email_async(
             resp = await client.post(
                 "https://api.resend.com/emails",
                 headers={
-                    "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                    "Authorization": f"Bearer {settings.RESEND_API_KEY.strip()}",
                     "Content-Type": "application/json",
                 },
                 json={
@@ -51,19 +51,24 @@ async def _send_resend_email_async(
             )
             if resp.status_code in (200, 201):
                 logger.info("resend_email_sent_successfully", extra={"recipient": recipient})
-                return True
+                return True, "Email sent successfully via Resend"
             else:
+                try:
+                    err_json = resp.json()
+                    err_msg = err_json.get("message") or str(err_json)
+                except Exception:
+                    err_msg = resp.text
                 logger.error(
                     "resend_email_failed",
                     extra={"recipient": recipient, "status": resp.status_code, "body": resp.text},
                 )
-                return False
+                return False, f"Resend API error ({resp.status_code}): {err_msg}"
     except Exception as exc:
         logger.error(
             "resend_email_request_error",
             extra={"recipient": recipient, "error": str(exc)},
         )
-        return False
+        return False, f"Resend connection failed: {str(exc)}"
 
 
 def _send_smtp_email_sync(
@@ -71,14 +76,10 @@ def _send_smtp_email_sync(
     subject: str,
     html_content: str,
     text_content: str,
-) -> bool:
+) -> tuple[bool, str]:
     """Synchronous SMTP email delivery."""
     if not settings.SMTP_HOST:
-        logger.warning(
-            "smtp_not_configured_skipping_email",
-            extra={"recipient": recipient, "subject": subject},
-        )
-        return False
+        return False, "SMTP_HOST is not configured."
 
     sender = settings.SMTP_FROM_EMAIL
     # When using Gmail / Outlook SMTP, From must match the authenticated user
@@ -108,16 +109,16 @@ def _send_smtp_email_sync(
         server.sendmail(sender, [recipient], msg.as_string())
         server.quit()
         logger.info("smtp_email_sent_successfully", extra={"recipient": recipient})
-        return True
+        return True, "Email sent successfully via SMTP"
     except Exception as exc:
         logger.error(
             "smtp_email_delivery_failed",
             extra={"recipient": recipient, "error": str(exc)},
         )
-        return False
+        return False, f"SMTP delivery failed: {str(exc)}"
 
 
-async def send_otp_email(recipient: str, otp: str) -> bool:
+async def send_otp_email(recipient: str, otp: str) -> tuple[bool, str]:
     """Send a 6-digit password reset OTP to the user's email address."""
     subject = f"Your InfraSafe AI Password Reset OTP: {otp}"
 
@@ -161,21 +162,32 @@ async def send_otp_email(recipient: str, otp: str) -> bool:
     # Always log OTP in server logs for zero-friction debugging
     logger.info("password_reset_otp_generated", extra={"recipient": recipient, "otp": otp})
 
+    reasons: list[str] = []
+
     # 1. Try Resend HTTP API if configured
     if settings.RESEND_API_KEY:
-        resend_sent = await _send_resend_email_async(recipient, subject, html_content)
-        if resend_sent:
-            return True
+        resend_ok, resend_reason = await _send_resend_email_async(recipient, subject, html_content)
+        if resend_ok:
+            return True, resend_reason
+        reasons.append(resend_reason)
 
     # 2. Try SMTP if configured
     if settings.SMTP_HOST:
-        return await asyncio.to_thread(
+        smtp_ok, smtp_reason = await asyncio.to_thread(
             _send_smtp_email_sync,
             recipient,
             subject,
             html_content,
             text_content,
         )
+        if smtp_ok:
+            return True, smtp_reason
+        reasons.append(smtp_reason)
 
-    logger.warning("no_email_service_configured", extra={"recipient": recipient})
-    return False
+    if not reasons:
+        reasons.append(
+            "No email service configured. Please ensure RESEND_API_KEY or SMTP_HOST is set in Render environment variables."
+        )
+
+    logger.warning("email_dispatch_failed", extra={"recipient": recipient, "reasons": reasons})
+    return False, " | ".join(reasons)

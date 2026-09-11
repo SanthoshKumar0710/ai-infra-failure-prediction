@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, field_validator
+from pydantic import AliasChoices, Field, PostgresDsn, RedisDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
 
     POSTGRES_PASSWORD: str = Field(
-        ...,
+        default="",
         description="Postgres password",
     )
 
@@ -99,7 +99,10 @@ class Settings(BaseSettings):
 
     DATABASE_ECHO: bool = False
 
-    SQLALCHEMY_DATABASE_URI: PostgresDsn | None = None
+    SQLALCHEMY_DATABASE_URI: str | PostgresDsn | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SQLALCHEMY_DATABASE_URI", "DATABASE_URL"),
+    )
 
     @field_validator(
         "SQLALCHEMY_DATABASE_URI",
@@ -113,17 +116,21 @@ class Settings(BaseSettings):
     ) -> str:
 
         if isinstance(v, str) and v:
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+                v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
             return v
 
         data = info.data
 
         return (
             f"postgresql+asyncpg://"
-            f"{data['POSTGRES_USER']}:"
-            f"{data['POSTGRES_PASSWORD']}"
-            f"@{data['POSTGRES_HOST']}:"
-            f"{data['POSTGRES_PORT']}/"
-            f"{data['POSTGRES_DB']}"
+            f"{data.get('POSTGRES_USER', 'postgres')}:"
+            f"{data.get('POSTGRES_PASSWORD', '')}"
+            f"@{data.get('POSTGRES_HOST', 'localhost')}:"
+            f"{data.get('POSTGRES_PORT', 5432)}/"
+            f"{data.get('POSTGRES_DB', 'ai_infra_failure_prediction')}"
         )
 
     # ============================================================

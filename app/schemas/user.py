@@ -90,6 +90,11 @@ class UserUpdate(BaseModel):
 
     role: UserRole | None = None
 
+    password: str | None = Field(
+        default=None,
+        min_length=settings.MIN_PASSWORD_LENGTH,
+    )
+
     is_active: bool | None = None
 
     is_verified: bool | None = None

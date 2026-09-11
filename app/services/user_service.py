@@ -79,6 +79,10 @@ class UserService:
 
         update_data = payload.model_dump(exclude_unset=True)
 
+        if "password" in update_data and update_data["password"]:
+            from app.core.security import hash_password
+            user.hashed_password = hash_password(update_data.pop("password"))
+
         for field, value in update_data.items():
             setattr(user, field, value)
 

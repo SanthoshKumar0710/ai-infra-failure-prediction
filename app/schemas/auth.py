@@ -20,6 +20,11 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class ErrorResponse(BaseModel):
     """Consistent error envelope returned by every 4xx/5xx response."""
 

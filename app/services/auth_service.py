@@ -18,6 +18,7 @@ from app.core.exceptions import (
     AccountLockedError,
     InactiveUserError,
     InvalidCredentialsError,
+    NotFoundError,
     TokenError,
     UserAlreadyExistsError,
 )
@@ -69,6 +70,18 @@ class AuthService:
         )
         user = await self._users.add(user)
         logger.info("user_registered", extra={"user_id": str(user.id), "role": role.value})
+        return user
+
+    async def reset_password(self, email: str, new_password: str) -> User:
+        user = await self._users.get_by_email(email)
+        if user is None:
+            raise NotFoundError("No account found with this email address.")
+
+        user.hashed_password = hash_password(new_password)
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user = await self._users.update(user)
+        logger.info("password_reset_success", extra={"user_id": str(user.id)})
         return user
 
     # --- Login / token issuance ---------------------------------------------

@@ -8,11 +8,21 @@ from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import CurrentUser, get_auth_service, oauth2_scheme
-from app.schemas.auth import RefreshRequest, TokenPair
+from app.schemas.auth import PasswordResetRequest, RefreshRequest, TokenPair
 from app.schemas.user import UserCreate, UserRead
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(
+    payload: PasswordResetRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> dict[str, str]:
+    """Reset a user's password directly using their registered email."""
+    await auth_service.reset_password(payload.email, payload.new_password)
+    return {"message": "Password reset successfully. You can now sign in with your new password."}
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)

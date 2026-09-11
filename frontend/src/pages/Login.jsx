@@ -12,13 +12,14 @@ import {
   User,
 } from "lucide-react";
 
-import { loginUser, registerUser } from "../api/auth";
+import { loginUser, registerUser, resetPassword } from "../api/auth";
 
 function Login({ onLogin }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
@@ -35,13 +36,26 @@ function Login({ onLogin }) {
       if (mode === "login") {
         await loginUser(email, password);
         onLogin();
-      } else {
+      } else if (mode === "register") {
         await registerUser(email, fullName, password);
         setSuccess(
           "Account created! You can now log in."
         );
         setMode("login");
         setPassword("");
+      } else if (mode === "forgot") {
+        if (password !== confirmPassword) {
+          setError("Passwords do not match.");
+          setLoading(false);
+          return;
+        }
+        await resetPassword(email, password);
+        setSuccess(
+          "Password reset successfully! Please sign in with your new password."
+        );
+        setMode("login");
+        setPassword("");
+        setConfirmPassword("");
       }
     } catch (err) {
       const detail =
@@ -622,12 +636,16 @@ function Login({ onLogin }) {
               <h2>
                 {mode === "login"
                   ? "Welcome Back"
-                  : "Create Account"}
+                  : mode === "register"
+                  ? "Create Account"
+                  : "Reset Password"}
               </h2>
               <p>
                 {mode === "login"
                   ? "Sign in to your InfraSafe AI dashboard"
-                  : "Register a new account to get started."}
+                  : mode === "register"
+                  ? "Register a new account to get started."
+                  : "Enter your registered email and choose a new password."}
               </p>
             </div>
 
@@ -684,7 +702,9 @@ function Login({ onLogin }) {
               </div>
 
               <div className="infrasafe-field">
-                <label htmlFor="password">Password</label>
+                <label htmlFor="password">
+                  {mode === "forgot" ? "New Password" : "Password"}
+                </label>
                 <div className="infrasafe-input-wrap">
                   <span className="infrasafe-input-icon">
                     <Lock size={18} />
@@ -692,11 +712,15 @@ function Login({ onLogin }) {
                   <input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
+                    placeholder={
+                      mode === "forgot"
+                        ? "Enter your new password"
+                        : "Enter your password"
+                    }
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={12}
+                    minLength={8}
                     autoComplete={
                       mode === "login"
                         ? "current-password"
@@ -714,12 +738,33 @@ function Login({ onLogin }) {
                   </button>
                 </div>
 
-                {mode === "register" && (
+                {(mode === "register" || mode === "forgot") && (
                   <small className="infrasafe-helper-hint">
-                    Min 12 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character.
+                    Min 8 characters (recommended with uppercase, lowercase, digit, and symbol).
                   </small>
                 )}
               </div>
+
+              {mode === "forgot" && (
+                <div className="infrasafe-field">
+                  <label htmlFor="confirmPassword">Confirm New Password</label>
+                  <div className="infrasafe-input-wrap">
+                    <span className="infrasafe-input-icon">
+                      <Lock size={18} />
+                    </span>
+                    <input
+                      id="confirmPassword"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Confirm your new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </div>
+              )}
 
               {mode === "login" && (
                 <div className="infrasafe-row-controls">
@@ -735,11 +780,11 @@ function Login({ onLogin }) {
                   <button
                     type="button"
                     className="infrasafe-forgot-btn"
-                    onClick={() =>
-                      setError(
-                        "Password reset is managed by your infrastructure administrator."
-                      )
-                    }
+                    onClick={() => {
+                      setMode("forgot");
+                      setError("");
+                      setSuccess("");
+                    }}
                   >
                     Forgot password?
                   </button>
@@ -758,9 +803,14 @@ function Login({ onLogin }) {
                     <span>Sign In</span>
                     <ArrowRight size={18} />
                   </>
-                ) : (
+                ) : mode === "register" ? (
                   <>
                     <span>Create Account</span>
+                    <ArrowRight size={18} />
+                  </>
+                ) : (
+                  <>
+                    <span>Reset Password</span>
                     <ArrowRight size={18} />
                   </>
                 )}
@@ -783,7 +833,7 @@ function Login({ onLogin }) {
                     Sign up
                   </button>
                 </p>
-              ) : (
+              ) : mode === "register" ? (
                 <p>
                   Already have an account?
                   <button
@@ -796,6 +846,21 @@ function Login({ onLogin }) {
                     }}
                   >
                     Sign in
+                  </button>
+                </p>
+              ) : (
+                <p>
+                  Remembered your password?
+                  <button
+                    type="button"
+                    className="infrasafe-switch-btn"
+                    onClick={() => {
+                      setMode("login");
+                      setError("");
+                      setSuccess("");
+                    }}
+                  >
+                    Back to Sign In
                   </button>
                 </p>
               )}

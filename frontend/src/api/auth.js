@@ -64,3 +64,15 @@ export async function getMe() {
   const response = await api.get("/auth/me");
   return response.data;
 }
+
+// ============================================================
+// RESET PASSWORD
+// ============================================================
+
+export async function resetPassword(email, newPassword) {
+  const response = await api.post("/auth/reset-password", {
+    email,
+    new_password: newPassword,
+  });
+  return response.data;
+}

@@ -164,14 +164,7 @@ async def send_otp_email(recipient: str, otp: str) -> tuple[bool, str]:
 
     reasons: list[str] = []
 
-    # 1. Try Resend HTTP API if configured
-    if settings.RESEND_API_KEY:
-        resend_ok, resend_reason = await _send_resend_email_async(recipient, subject, html_content)
-        if resend_ok:
-            return True, resend_reason
-        reasons.append(resend_reason)
-
-    # 2. Try SMTP if configured
+    # 1. Try SMTP first if configured (e.g. Gmail SMTP can send to ANY email address with 0 sandbox restrictions)
     if settings.SMTP_HOST:
         smtp_ok, smtp_reason = await asyncio.to_thread(
             _send_smtp_email_sync,
@@ -183,6 +176,13 @@ async def send_otp_email(recipient: str, otp: str) -> tuple[bool, str]:
         if smtp_ok:
             return True, smtp_reason
         reasons.append(smtp_reason)
+
+    # 2. Try Resend HTTP API as alternate / fallback
+    if settings.RESEND_API_KEY:
+        resend_ok, resend_reason = await _send_resend_email_async(recipient, subject, html_content)
+        if resend_ok:
+            return True, resend_reason
+        reasons.append(resend_reason)
 
     if not reasons:
         reasons.append(

@@ -34,9 +34,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     on misconfiguration) and clean up pooled connections on shutdown."""
     logger.info("application_starting", extra={"environment": settings.ENVIRONMENT})
 
-    redis = get_redis()
-    await redis.ping()
-    logger.info("redis_connection_ok")
+    try:
+        redis = get_redis()
+        await redis.ping()
+        logger.info("redis_connection_ok")
+    except Exception as exc:
+        logger.warning("redis_connection_failed", extra={"error": str(exc)})
 
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))

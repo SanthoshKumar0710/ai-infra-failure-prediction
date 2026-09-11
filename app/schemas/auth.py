@@ -33,7 +33,6 @@ class SendOtpResponse(BaseModel):
     message: str
     email: str
     expires_in_minutes: int
-    dev_otp: str | None = None
 
 
 class VerifyOtpRequest(BaseModel):

@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.email import send_otp_email
 from app.core.exceptions import (
     AccountLockedError,
+    EmailDeliveryError,
     InactiveUserError,
     InvalidCredentialsError,
     NotFoundError,
@@ -99,14 +100,19 @@ class AuthService:
         await self._redis.set(f"{_OTP_PREFIX}{email.lower()}", otp, ex=ttl_seconds)
         email_sent = await send_otp_email(email.lower(), otp)
 
-        dev_otp = None if (settings.is_production and email_sent) else otp
-        logger.info("password_reset_otp_dispatched", extra={"email": email.lower(), "email_sent": email_sent})
+        if not email_sent:
+            # Delete cached OTP since it was not delivered to the user's email
+            await self._redis.delete(f"{_OTP_PREFIX}{email.lower()}")
+            raise EmailDeliveryError(
+                "Unable to deliver OTP email. Please ensure SMTP credentials or RESEND_API_KEY are configured in environment variables."
+            )
+
+        logger.info("password_reset_otp_dispatched", extra={"email": email.lower()})
 
         return SendOtpResponse(
-            message=f"Verification code sent to {email}. Code expires in {settings.OTP_EXPIRE_MINUTES} minutes.",
+            message=f"Verification code sent to {email}. Please check your email inbox.",
             email=email,
             expires_in_minutes=settings.OTP_EXPIRE_MINUTES,
-            dev_otp=dev_otp,
         )
 
     async def verify_otp_and_reset(self, email: str, otp: str, new_password: str) -> TokenPair:

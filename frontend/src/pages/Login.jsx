@@ -12,7 +12,6 @@ import {
   User,
   KeyRound,
   CheckCircle2,
-  Sparkles,
   RotateCw,
   X,
 } from "lucide-react";
@@ -33,7 +32,6 @@ function Login({ onLogin }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [otp, setOtp] = useState("");
-  const [devOtpNotice, setDevOtpNotice] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
@@ -95,17 +93,17 @@ function Login({ onLogin }) {
 
     try {
       const res = await sendPasswordResetOtp(email);
-      setSuccess(res.message || `Verification OTP sent to ${email}`);
-      if (res.dev_otp) {
-        setDevOtpNotice(res.dev_otp);
-      }
+      setSuccess(
+        res.message ||
+          `Verification code sent to ${email}. Please check your email inbox.`
+      );
       setOtpStep(2);
     } catch (err) {
       const detail =
         err.response?.data?.detail ||
         err.response?.data?.error_code ||
         err.message ||
-        "Failed to send verification code.";
+        "Failed to dispatch verification email. Please ensure SMTP or email settings are configured.";
       setError(typeof detail === "string" ? detail : JSON.stringify(detail));
     } finally {
       setLoading(false);
@@ -120,12 +118,15 @@ function Login({ onLogin }) {
 
     try {
       const res = await sendPasswordResetOtp(email);
-      setSuccess(res.message || `A new verification code was sent to ${email}`);
-      if (res.dev_otp) {
-        setDevOtpNotice(res.dev_otp);
-      }
+      setSuccess(
+        res.message ||
+          `A new verification code was sent to ${email}. Please check your inbox.`
+      );
     } catch (err) {
-      setError(err.response?.data?.detail || "Could not resend verification code.");
+      setError(
+        err.response?.data?.detail ||
+          "Could not resend verification email. Please check email configuration."
+      );
     } finally {
       setLoading(false);
     }
@@ -135,7 +136,7 @@ function Login({ onLogin }) {
   async function handleVerifyOtpAndLogin(e) {
     e.preventDefault();
     if (!otp || otp.trim().length !== 6) {
-      setError("Please enter the complete 6-digit OTP code.");
+      setError("Please enter the complete 6-digit OTP code received in your email.");
       return;
     }
     if (password !== confirmPassword) {
@@ -149,8 +150,7 @@ function Login({ onLogin }) {
 
     try {
       await verifyOtpAndLogin(email, otp.trim(), password);
-      setSuccess("Verification successful! Logging you in...");
-      // Auto-login into dashboard immediately
+      setSuccess("OTP verified successfully! Logging you in...");
       setTimeout(() => {
         onLogin();
       }, 400);
@@ -172,7 +172,7 @@ function Login({ onLogin }) {
 
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    // If client ID is configured and Google SDK script is ready, trigger official Google One-Tap/Popup
+    // If client ID is configured and Google SDK script is ready, trigger official Google popup
     if (clientId && window.google?.accounts?.id) {
       setGoogleLoading(true);
       try {
@@ -523,12 +523,6 @@ function Login({ onLogin }) {
           color: #6ee7b7;
         }
 
-        .infrasafe-alert.info {
-          background: rgba(99, 102, 241, 0.12);
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          color: #a5b4fc;
-        }
-
         /* Form elements */
         .infrasafe-form {
           display: flex;
@@ -591,7 +585,7 @@ function Login({ onLogin }) {
         .infrasafe-input-wrap input.otp-code-input {
           padding: 0 16px;
           text-align: center;
-          font-size: 22px;
+          font-size: 24px;
           letter-spacing: 0.4em;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-weight: 700;
@@ -932,7 +926,7 @@ function Login({ onLogin }) {
                   : mode === "register"
                   ? "Register using your Email or Google Account"
                   : otpStep === 1
-                  ? "Enter your email to receive a 6-digit verification code"
+                  ? "Enter your registered email to receive a 6-digit verification code"
                   : `Enter the 6-digit code sent to ${email} to reset password and login`}
               </p>
             </div>
@@ -948,15 +942,6 @@ function Login({ onLogin }) {
               <div className="infrasafe-alert success">
                 <CheckCircle2 size={18} />
                 <span>{success}</span>
-              </div>
-            )}
-
-            {devOtpNotice && mode === "forgot" && otpStep === 2 && (
-              <div className="infrasafe-alert info">
-                <Sparkles size={18} />
-                <span>
-                  <strong>Verification Code:</strong> {devOtpNotice}
-                </span>
               </div>
             )}
 
@@ -1119,7 +1104,6 @@ function Login({ onLogin }) {
                         setOtpStep(1);
                         setError("");
                         setSuccess("");
-                        setDevOtpNotice("");
                         setPassword("");
                         setConfirmPassword("");
                         setOtp("");
@@ -1173,7 +1157,7 @@ function Login({ onLogin }) {
                     />
                   </div>
                   <small className="infrasafe-helper-hint">
-                    A secure 6-digit verification code will be dispatched to this email.
+                    A secure 6-digit verification code will be sent to your email inbox.
                   </small>
                 </div>
 
@@ -1186,7 +1170,7 @@ function Login({ onLogin }) {
                     <div className="loading-spinner small" />
                   ) : (
                     <>
-                      <span>Send OTP Code</span>
+                      <span>Send Verification Email</span>
                       <ArrowRight size={18} />
                     </>
                   )}
@@ -1198,7 +1182,7 @@ function Login({ onLogin }) {
             {mode === "forgot" && otpStep === 2 && (
               <form onSubmit={handleVerifyOtpAndLogin} className="infrasafe-form">
                 <div className="infrasafe-field">
-                  <label htmlFor="otpCode">6-Digit Verification Code (OTP)</label>
+                  <label htmlFor="otpCode">6-Digit Code (Sent to your Email)</label>
                   <div className="infrasafe-input-wrap">
                     <input
                       id="otpCode"
@@ -1213,6 +1197,9 @@ function Login({ onLogin }) {
                       autoComplete="one-time-code"
                     />
                   </div>
+                  <small className="infrasafe-helper-hint">
+                    Check your email inbox (and spam folder) for the 6-digit code.
+                  </small>
                 </div>
 
                 <div className="infrasafe-field">
@@ -1270,7 +1257,7 @@ function Login({ onLogin }) {
                     disabled={loading}
                   >
                     <RotateCw size={14} />
-                    <span>Resend OTP Code</span>
+                    <span>Resend Email</span>
                   </button>
 
                   <button
@@ -1315,7 +1302,6 @@ function Login({ onLogin }) {
                       setMode("register");
                       setError("");
                       setSuccess("");
-                      setDevOtpNotice("");
                     }}
                   >
                     Sign up
@@ -1331,7 +1317,6 @@ function Login({ onLogin }) {
                       setMode("login");
                       setError("");
                       setSuccess("");
-                      setDevOtpNotice("");
                     }}
                   >
                     Sign in
@@ -1347,7 +1332,6 @@ function Login({ onLogin }) {
                       setMode("login");
                       setError("");
                       setSuccess("");
-                      setDevOtpNotice("");
                     }}
                   >
                     Back to Sign In

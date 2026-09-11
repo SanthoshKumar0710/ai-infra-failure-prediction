@@ -84,3 +84,14 @@ class ValidationAppError(AppException):
 
     def __init__(self, detail: str = "Validation failed.") -> None:
         super().__init__(detail)
+
+
+class EmailDeliveryError(AppException):
+    status_code = 502
+    error_code = "email_delivery_failed"
+
+    def __init__(
+        self,
+        detail: str = "Could not send verification email. Please verify SMTP / email service credentials.",
+    ) -> None:
+        super().__init__(detail)

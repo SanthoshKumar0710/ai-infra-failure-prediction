@@ -235,9 +235,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str | None = None
 
     # ============================================================
-    # Email / SMTP
+    # Email / SMTP / Resend API
     # ============================================================
 
+    RESEND_API_KEY: str | None = None
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
     SMTP_USER: str | None = None

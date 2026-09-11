@@ -47,6 +47,10 @@ function Login({ onLogin }) {
   // Standard Login / Register form submission
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!email.trim().toLowerCase().endsWith("@gmail.com")) {
+      setError("Only @gmail.com email addresses are permitted.");
+      return;
+    }
     setError("");
     setSuccess("");
     setLoading(true);
@@ -85,6 +89,10 @@ function Login({ onLogin }) {
     e.preventDefault();
     if (!email) {
       setError("Please enter your registered email address.");
+      return;
+    }
+    if (!email.trim().toLowerCase().endsWith("@gmail.com")) {
+      setError("Only @gmail.com email addresses are permitted.");
       return;
     }
     setError("");
@@ -206,6 +214,10 @@ function Login({ onLogin }) {
   async function handleGoogleModalSubmit(e) {
     e.preventDefault();
     if (!googleEmail) return;
+    if (!googleEmail.trim().toLowerCase().endsWith("@gmail.com")) {
+      setError("Only @gmail.com Google accounts are permitted.");
+      return;
+    }
 
     setError("");
     setGoogleLoading(true);

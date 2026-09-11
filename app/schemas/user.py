@@ -25,6 +25,13 @@ class UserBase(BaseModel):
         max_length=255,
     )
 
+    @field_validator("email")
+    @classmethod
+    def validate_gmail(cls, value: str) -> str:
+        if not value.lower().endswith("@gmail.com"):
+            raise ValueError("Only @gmail.com email addresses are permitted.")
+        return value.lower()
+
 
 # -------------------------------------------------------------------------
 # User Registration

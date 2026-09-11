@@ -90,6 +90,9 @@ class AuthService:
         return user
 
     async def send_password_reset_otp(self, email: str) -> SendOtpResponse:
+        if not email.lower().endswith("@gmail.com"):
+            raise InvalidCredentialsError("Only @gmail.com email addresses are permitted.")
+
         user = await self._users.get_by_email(email)
         if user is None:
             raise NotFoundError("No account found with this email address.")
@@ -158,8 +161,8 @@ class AuthService:
             if payload.name:
                 full_name = payload.name
 
-        if not email:
-            raise InvalidCredentialsError("Could not verify Google account identity.")
+        if not email or not email.lower().endswith("@gmail.com"):
+            raise InvalidCredentialsError("Only @gmail.com Google accounts are permitted.")
 
         user = await self._users.get_by_email(email)
         if user is None:
@@ -185,6 +188,9 @@ class AuthService:
     # --- Login / token issuance ---------------------------------------------
 
     async def authenticate(self, email: str, password: str) -> TokenPair:
+        if not email.lower().endswith("@gmail.com"):
+            raise InvalidCredentialsError("Only @gmail.com accounts are permitted.")
+
         user = await self._users.get_by_email(email)
 
         # Constant response shape whether the user exists or not, to avoid
